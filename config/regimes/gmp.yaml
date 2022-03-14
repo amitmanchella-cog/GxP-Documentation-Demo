@@ -1,0 +1,17 @@
+regime: GMP
+label: EU/US GMP (21 CFR 210/211, EudraLex Vol 4)
+record_controls:
+  audit_trail_on: [create, update, delete]
+  reason_required_on: [update, delete]
+  reason_min_length: 10
+  deletion: soft
+  second_person_verification_on_oos_change: true
+results:
+  rounding: half_up           # SOP-QC-021 s4
+  compare_on: reportable
+  limit_inclusive: true
+retention:
+  records_years: 10
+  audit_trail_years: 10
+e_signature:
+  required_for: [result_release, amendment_verification]

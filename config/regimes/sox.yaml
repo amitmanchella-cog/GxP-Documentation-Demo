@@ -1,0 +1,17 @@
+regime: SOX
+label: SOX s404 ITGC (financially relevant records)
+record_controls:
+  audit_trail_on: [create, update, delete]
+  reason_required_on: [update, delete]
+  reason_min_length: 5
+  deletion: soft
+  second_person_verification_on_oos_change: false
+results:
+  rounding: half_even         # financial rounding convention
+  compare_on: reportable
+  limit_inclusive: true
+retention:
+  records_years: 7
+  audit_trail_years: 7
+e_signature:
+  required_for: [period_close]

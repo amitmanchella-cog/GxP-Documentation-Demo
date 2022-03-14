@@ -1,0 +1,6 @@
+{% extends "base.html" %}{% block title %}Audit trail{% endblock %}{% block body %}
+<h1>Audit trail <small>latest {{ trail|length }}</small></h1>
+<table class="grid">
+<thead><tr><th>#</th><th>Timestamp (UTC)</th><th>User</th><th>Entity</th><th>ID</th><th>Action</th><th>Field</th><th>Old</th><th>New</th><th>Reason</th></tr></thead>
+<tbody>{% for a in trail %}<tr><td>{{ a.audit_id }}</td><td>{{ a.ts }}</td><td>{{ a.actor }}</td><td>{{ a.entity }}</td><td>{% if a.entity == 'assay_result' %}<a href="/results/{{ a.entity_id }}">{{ a.entity_id }}</a>{% else %}{{ a.entity_id }}{% endif %}</td><td>{{ a.action }}</td><td>{{ a.field or '' }}</td><td>{{ a.old_value or '' }}</td><td>{{ a.new_value or '' }}</td><td>{{ a.reason or '' }}</td></tr>{% endfor %}</tbody></table>
+{% endblock %}

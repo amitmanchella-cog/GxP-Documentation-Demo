@@ -1,0 +1,10 @@
+{% extends "base.html" %}{% block title %}Studies{% endblock %}{% block body %}
+<h1>Stability studies <small>{{ studies|length }}</small></h1>
+<table class="grid">
+<thead><tr><th>Study</th><th>Product</th><th>Strength / form</th><th>Protocol</th><th>Start</th><th>Status</th><th>Owner</th><th class="n">Samples</th><th class="n">OOS</th></tr></thead>
+<tbody>{% for s in studies %}
+<tr><td><a href="/samples?study={{ s.study_id }}">{{ s.study_id }}</a></td><td>{{ s.product }}</td><td>{{ s.strength }}</td><td>{{ s.protocol }}</td>
+<td>{{ s.start_date }}</td><td><span class="st st-{{ s.status|lower }}">{{ s.status }}</span></td><td>{{ s.owner_name }}</td>
+<td class="n">{{ s.n_samples }}</td><td class="n {% if s.n_oos %}oos{% endif %}">{{ s.n_oos }}</td></tr>
+{% endfor %}</tbody></table>
+{% endblock %}

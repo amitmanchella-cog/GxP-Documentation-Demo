@@ -1,0 +1,18 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>{% block title %}SST{% endblock %} · SST</title>
+<link rel="stylesheet" href="/static/sst.css"></head>
+<body>
+<header class="top">
+  <div class="brand">SST <span class="ver">v{{ version }}</span></div>
+  <nav>
+    <a href="/" {% if request.url.path == '/' %}class="on"{% endif %}>Studies</a>
+    <a href="/samples" {% if request.url.path.startswith('/samples') %}class="on"{% endif %}>Samples</a>
+    <a href="/audit" {% if request.url.path == '/audit' %}class="on"{% endif %}>Audit trail</a>
+    <a href="/config" {% if request.url.path == '/config' %}class="on"{% endif %}>Config</a>
+    <a href="/api/docs">API</a>
+  </nav>
+  <div class="meta"><span class="pill">{{ regime.code }}</span> {{ cfg.site }} · <b>{{ user }}</b></div>
+</header>
+<main>{% block body %}{% endblock %}</main>
+<footer>{{ cfg.system_name }} · {{ cfg.system_id }} · regime {{ regime.code }} ({{ regime.label }}) · times UTC</footer>
+</body></html>

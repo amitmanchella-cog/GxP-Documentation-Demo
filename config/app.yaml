@@ -1,0 +1,7 @@
+# Stability Sample Tracker runtime configuration
+system_id: SST
+system_name: Stability Sample Tracker
+site: Veltrix Pharmaceuticals - QC Stability, Site 02
+active_regime: gmp
+database: data/sst.sqlite3
+timezone_display: UTC
