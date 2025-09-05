@@ -57,6 +57,8 @@ def test_delete_is_soft_and_audited(client, conn):
     )
     assert last["reason"] == "Duplicate entry of R-000001"
     assert client.get(f"/api/results/{rid}").status_code == 404
+    page = client.get(f"/results/{rid}")
+    assert page.status_code == 200 and "Deleted" in page.text and "Duplicate entry of R-000001" in page.text
 
 
 def test_audit_entries_are_append_only_at_api_level(client):

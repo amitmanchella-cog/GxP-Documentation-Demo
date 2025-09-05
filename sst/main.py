@@ -136,7 +136,8 @@ def sample_detail(request: Request, sample_id: str, conn: sqlite3.Connection = D
 
 @app.get("/results/{result_id}", response_class=HTMLResponse)
 def result_detail(request: Request, result_id: int, conn: sqlite3.Connection = Depends(get_conn)):
-    r = _get_result(conn, result_id)
+    # Deleted results stay viewable with their history (SOP-DI-004 s4.3: soft delete, record retained).
+    r = _get_result(conn, result_id, include_deleted=True)
     trail = conn.execute(
         "SELECT * FROM audit_trail WHERE entity='assay_result' AND entity_id=? ORDER BY audit_id",
         (str(result_id),),
@@ -172,13 +173,13 @@ class DeleteIn(BaseModel):
     reason: str
 
 
-def _get_result(conn: sqlite3.Connection, result_id: int) -> sqlite3.Row:
+def _get_result(conn: sqlite3.Connection, result_id: int, include_deleted: bool = False) -> sqlite3.Row:
     r = conn.execute(
         """SELECT r.*, sp.test_name, sp.method, sp.unit, sp.limit_text, sp.lower_limit, sp.upper_limit,
                   u.full_name AS analyst_name
            FROM assay_results r JOIN specifications sp ON sp.spec_id=r.spec_id
-           JOIN users u ON u.user_id=r.analyst WHERE r.result_id=? AND r.deleted=0""",
-        (result_id,),
+           JOIN users u ON u.user_id=r.analyst WHERE r.result_id=? AND (r.deleted=0 OR ?)""",
+        (result_id, int(include_deleted)),
     ).fetchone()
     if not r:
         raise HTTPException(404, "result not found")
