@@ -32,7 +32,9 @@ def test_create_result_writes_audit_entry(client, conn):
 
 def test_delete_requires_reason(client, conn):
     rid = conn.execute("SELECT result_id FROM assay_results LIMIT 1").fetchone()[0]
-    r = client.request("DELETE", f"/api/results/{rid}", json={"reason": "typo"})
+    r = client.request(
+        "DELETE", f"/api/results/{rid}", json={"reason": "typo"}, headers={"x-user": "adiallo"}
+    )
     assert r.status_code == 422
     assert conn.execute("SELECT deleted FROM assay_results WHERE result_id=?", (rid,)).fetchone()[0] == 0
 
@@ -83,3 +85,51 @@ def test_reason_rule_is_regime_driven(conn):
         )
         > 0
     )
+
+
+def test_delete_requires_supervisor_or_qa_role(client, conn):
+    rid = conn.execute("SELECT result_id FROM assay_results LIMIT 1").fetchone()[0]
+    r = client.request(
+        "DELETE",
+        f"/api/results/{rid}",
+        json={"reason": "Duplicate entry, see R-000002"},
+        headers={"x-user": "jokafor"},
+    )
+    assert r.status_code == 403
+    assert conn.execute("SELECT deleted FROM assay_results WHERE result_id=?", (rid,)).fetchone()[0] == 0
+
+
+def test_unprovisioned_user_is_rejected(client):
+    r = client.post(
+        "/api/results",
+        json={
+            "sample_id": "VC21118A-LT-00M",
+            "spec_id": "STB-2021-004-S01",
+            "measured_value": "99.0",
+            "tested_at": "2025-01-10T09:12:00Z",
+        },
+        headers={"x-user": "new.analyst"},
+    )
+    assert r.status_code == 403
+
+
+def test_specification_must_belong_to_sample_study(client):
+    r = client.post(
+        "/api/results",
+        json={
+            "sample_id": "VC21118A-LT-00M",
+            "spec_id": "STB-2022-011-S01",
+            "measured_value": "99.0",
+            "tested_at": "2025-01-10T09:12:00Z",
+        },
+        headers={"x-user": "jokafor"},
+    )
+    assert r.status_code == 422 and "does not belong" in r.text
+
+
+def test_tested_at_is_validated_and_normalised_to_utc(client):
+    base = {"sample_id": "VC21118A-LT-00M", "spec_id": "STB-2021-004-S01", "measured_value": "99.0"}
+    assert client.post("/api/results", json={**base, "tested_at": "not-a-date"}).status_code == 422
+    assert client.post("/api/results", json={**base, "tested_at": "2025-01-10T09:12:00"}).status_code == 422
+    r = client.post("/api/results", json={**base, "tested_at": "2025-01-10T10:12:00+01:00"})
+    assert r.status_code == 201 and r.json()["tested_at"] == "2025-01-10T09:12:00Z"

@@ -44,6 +44,15 @@ CREATE INDEX IF NOT EXISTS ix_results_sample ON assay_results(sample_id);
 
 SCHEMA_VERSION = 7
 
+# Column additions for databases created before the given version (tables themselves come from SCHEMA).
+MIGRATIONS: dict[int, list[tuple[str, str, str]]] = {
+    7: [("assay_results", "deleted", "INTEGER NOT NULL DEFAULT 0")],
+}
+
+
+def _has_column(conn: sqlite3.Connection, table: str, column: str) -> bool:
+    return any(r[1] == column for r in conn.execute(f"PRAGMA table_info({table})"))
+
 
 def db_path() -> Path:
     p = os.environ.get("SST_DATABASE") or load_app_config()["database"]
@@ -62,10 +71,18 @@ def connect(path: Path | str | None = None) -> sqlite3.Connection:
 
 def init_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(SCHEMA)
-    cur = conn.execute("SELECT MAX(version) FROM schema_version")
-    if (cur.fetchone()[0] or 0) < SCHEMA_VERSION:
-        conn.execute(
-            "INSERT INTO schema_version(version, applied_at) VALUES (?, datetime('now'))",
-            (SCHEMA_VERSION,),
-        )
+    current = conn.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] or 0
+    if current < SCHEMA_VERSION:
+        for version in sorted(v for v in MIGRATIONS if v > current):
+            for table, column, ddl in MIGRATIONS[version]:
+                if not _has_column(conn, table, column):
+                    conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {ddl}")
+            conn.execute(
+                "INSERT INTO schema_version(version, applied_at) VALUES (?, datetime('now'))", (version,)
+            )
+        if SCHEMA_VERSION not in MIGRATIONS:
+            conn.execute(
+                "INSERT INTO schema_version(version, applied_at) VALUES (?, datetime('now'))",
+                (SCHEMA_VERSION,),
+            )
     conn.commit()

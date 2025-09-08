@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import os
 import sqlite3
+import threading
+from datetime import datetime, timezone
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, HTTPException, Request
@@ -21,14 +23,19 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
 
 _state: dict = {}
+_conn_lock = threading.RLock()
+
+DELETE_ROLES = {"QC Supervisor", "QA"}
 
 
-def get_conn() -> sqlite3.Connection:
-    if "conn" not in _state:
-        conn = connect()
-        init_schema(conn)
-        _state["conn"] = conn
-    return _state["conn"]
+def get_conn():
+    """One connection, one request at a time: each request's writes + audit rows form one transaction."""
+    with _conn_lock:
+        if "conn" not in _state:
+            conn = connect()
+            init_schema(conn)
+            _state["conn"] = conn
+        yield _state["conn"]
 
 
 def get_regime() -> Regime:
@@ -46,8 +53,16 @@ def reset_state(conn: sqlite3.Connection | None = None, regime: Regime | None = 
 
 
 def current_user(request: Request) -> str:
-    # Authentication is delegated to the site SSO reverse proxy, which sets X-User.
+    # Authentication is delegated to the site SSO reverse proxy, which sets X-User on every request
+    # and strips any client-supplied value. The app is not exposed without the proxy.
     return request.headers.get("x-user") or os.environ.get("SST_USER", "mfarouk")
+
+
+def provisioned_user(conn: sqlite3.Connection, user_id: str) -> sqlite3.Row:
+    row = conn.execute("SELECT * FROM users WHERE user_id=? AND active=1", (user_id,)).fetchone()
+    if not row:
+        raise HTTPException(403, f"user {user_id!r} is not provisioned in SST")
+    return row
 
 
 def ctx(request: Request, **kw):
@@ -148,7 +163,7 @@ def result_detail(request: Request, result_id: int, conn: sqlite3.Connection = D
 @app.get("/audit", response_class=HTMLResponse)
 def audit_view(request: Request, limit: int = 200, conn: sqlite3.Connection = Depends(get_conn)):
     rows = conn.execute(
-        "SELECT * FROM audit_trail ORDER BY audit_id DESC LIMIT ?", (min(limit, 1000),)
+        "SELECT * FROM audit_trail ORDER BY audit_id DESC LIMIT ?", (max(1, min(limit, 1000)),)
     ).fetchall()
     return templates.TemplateResponse(request, "audit.html", ctx(request, trail=rows))
 
@@ -166,7 +181,12 @@ class ResultIn(BaseModel):
     spec_id: str
     measured_value: str = Field(pattern=r"^-?\d+(\.\d+)?$")
     instrument: str | None = None
-    tested_at: str
+    tested_at: datetime  # instrument/measurement time, ISO 8601 with offset; stored as UTC
+
+    def tested_at_utc(self) -> str:
+        if self.tested_at.tzinfo is None:
+            raise ValueError("tested_at must carry a timezone offset")
+        return self.tested_at.astimezone(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
 class DeleteIn(BaseModel):
@@ -202,9 +222,24 @@ def api_create_result(
     conn: sqlite3.Connection = Depends(get_conn),
     regime: Regime = Depends(get_regime),
 ):
+    actor = current_user(request)
+    provisioned_user(conn, actor)
     sp = conn.execute("SELECT * FROM specifications WHERE spec_id=?", (body.spec_id,)).fetchone()
-    if not sp or not conn.execute("SELECT 1 FROM samples WHERE sample_id=?", (body.sample_id,)).fetchone():
+    sample = conn.execute(
+        "SELECT sm.sample_id, b.study_id FROM samples sm JOIN batches b ON b.batch_id=sm.batch_id"
+        " WHERE sm.sample_id=?",
+        (body.sample_id,),
+    ).fetchone()
+    if not sp or not sample:
         raise HTTPException(404, "sample or specification not found")
+    if sp["study_id"] != sample["study_id"]:
+        raise HTTPException(
+            422, f"specification {body.spec_id} does not belong to study {sample['study_id']}"
+        )
+    try:
+        tested_at = body.tested_at_utc()
+    except ValueError as e:
+        raise HTTPException(422, str(e)) from e
     rv, oos = evaluate(
         body.measured_value,
         sp["lower_limit"],
@@ -212,7 +247,6 @@ def api_create_result(
         regime.results.rounding,
         regime.results.limit_inclusive,
     )
-    actor = current_user(request)
     cur = conn.execute(
         "INSERT INTO assay_results(sample_id, spec_id, measured_value, reportable_value, oos, analyst,"
         " instrument, tested_at) VALUES (?,?,?,?,?,?,?,?)",
@@ -224,7 +258,7 @@ def api_create_result(
             int(oos),
             actor,
             body.instrument,
-            body.tested_at,
+            tested_at,
         ),
     )
     audit.record(
@@ -252,6 +286,8 @@ def api_delete_result(
 ):
     r = _get_result(conn, result_id)
     actor = current_user(request)
+    if provisioned_user(conn, actor)["role"] not in DELETE_ROLES:
+        raise HTTPException(403, "deleting results requires the QC Supervisor or QA role")
     try:
         audit.record(
             conn,

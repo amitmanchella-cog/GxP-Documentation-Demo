@@ -33,3 +33,27 @@ def test_oos_visible_on_sample_page(client):
 def test_404s(client):
     assert client.get("/samples/NOPE").status_code == 404
     assert client.get("/results/999999").status_code == 404
+
+
+def test_audit_limit_is_clamped(client):
+    assert client.get("/audit?limit=-1").status_code == 200
+    assert client.get("/audit?limit=-1").text.count("<tr>") <= 2
+
+
+def test_schema_migration_adds_missing_columns():
+    import sqlite3
+
+    from sst.db import SCHEMA, init_schema
+
+    c = sqlite3.connect(":memory:")
+    c.executescript(
+        SCHEMA.replace(
+            ",\n  status TEXT NOT NULL DEFAULT 'Entered', deleted INTEGER NOT NULL DEFAULT 0",
+            ",\n  status TEXT NOT NULL DEFAULT 'Entered'",
+        )
+    )
+    c.execute("INSERT INTO schema_version(version, applied_at) VALUES (6, 'x')")
+    assert "deleted" not in {r[1] for r in c.execute("PRAGMA table_info(assay_results)")}
+    init_schema(c)
+    assert "deleted" in {r[1] for r in c.execute("PRAGMA table_info(assay_results)")}
+    assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 7

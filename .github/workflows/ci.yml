@@ -15,7 +15,7 @@ jobs:
       - run: ruff check .
       - run: ruff format --check .
       - name: pytest
-        run: mkdir -p reports && pytest --junitxml=reports/junit.xml --cov-report=xml:reports/coverage.xml | tee reports/pytest.txt
+        run: mkdir -p reports && set -o pipefail && pytest --junitxml=reports/junit.xml --cov-report=xml:reports/coverage.xml | tee reports/pytest.txt
       - uses: actions/upload-artifact@v4
         if: always()
         with:
