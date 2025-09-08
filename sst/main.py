@@ -23,19 +23,24 @@ app.mount("/static", StaticFiles(directory=BASE / "static"), name="static")
 templates = Jinja2Templates(directory=BASE / "templates")
 
 _state: dict = {}
-_conn_lock = threading.RLock()
+# A plain Lock (not RLock): FastAPI may run a generator dependency's setup and teardown on
+# different worker threads, and only Lock may be released from a thread other than the acquirer.
+_conn_lock = threading.Lock()
 
 DELETE_ROLES = {"QC Supervisor", "QA"}
 
 
 def get_conn():
     """One connection, one request at a time: each request's writes + audit rows form one transaction."""
-    with _conn_lock:
+    _conn_lock.acquire()
+    try:
         if "conn" not in _state:
             conn = connect()
             init_schema(conn)
             _state["conn"] = conn
         yield _state["conn"]
+    finally:
+        _conn_lock.release()
 
 
 def get_regime() -> Regime:

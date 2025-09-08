@@ -57,3 +57,15 @@ def test_schema_migration_adds_missing_columns():
     init_schema(c)
     assert "deleted" in {r[1] for r in c.execute("PRAGMA table_info(assay_results)")}
     assert c.execute("SELECT MAX(version) FROM schema_version").fetchone()[0] == 7
+
+
+def test_concurrent_requests_do_not_deadlock(client):
+    from concurrent.futures import ThreadPoolExecutor
+
+    paths = ["/samples", "/audit", "/", "/results/1", "/config"] * 6
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        codes = list(ex.map(lambda p: client.get(p).status_code, paths))
+    assert codes == [200] * len(paths)
+    # a failing request must release the lock for the next one
+    assert client.get("/results/999999").status_code == 404
+    assert client.get("/samples").status_code == 200
