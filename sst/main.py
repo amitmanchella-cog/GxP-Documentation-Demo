@@ -1,9 +1,11 @@
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
+from decimal import Decimal
 from pathlib import Path
 
 from fastapi import Depends, FastAPI, Form, HTTPException, Request
@@ -15,7 +17,7 @@ from pydantic import BaseModel, Field
 from . import __version__, audit
 from .db import connect, init_schema
 from .regimes import Regime, available_regimes, load_app_config, load_regime
-from .rounding import decimal_places, evaluate
+from .rounding import evaluate
 
 BASE = Path(__file__).resolve().parent
 app = FastAPI(title="Stability Sample Tracker", version=__version__, docs_url="/api/docs")
@@ -28,6 +30,10 @@ _state: dict = {}
 _conn_lock = threading.Lock()
 
 DELETE_ROLES = {"QC Supervisor", "QA"}
+AMEND_ROLES = {"QC Analyst", "Senior QC Analyst", "QC Supervisor"}
+VERIFY_ROLES = {"QC Supervisor"}
+PENDING_VERIFICATION = "Pending verification"
+MEASURED_VALUE_PATTERN = r"^-?\d+(\.\d+)?$"
 
 
 def get_conn():
@@ -184,7 +190,7 @@ def config_view(request: Request):
 class ResultIn(BaseModel):
     sample_id: str
     spec_id: str
-    measured_value: str = Field(pattern=r"^-?\d+(\.\d+)?$")
+    measured_value: str = Field(pattern=MEASURED_VALUE_PATTERN)
     instrument: str | None = None
     tested_at: datetime  # instrument/measurement time, ISO 8601 with offset; stored as UTC
 
@@ -199,7 +205,12 @@ class DeleteIn(BaseModel):
 
 
 class AmendIn(BaseModel):
-    measured_value: str = Field(pattern=r"^-?\d+(\.\d+)?$")
+    measured_value: str = Field(pattern=MEASURED_VALUE_PATTERN)
+    reason: str
+
+
+class VerifyIn(BaseModel):
+    reason: str
 
 
 def _get_result(conn: sqlite3.Connection, result_id: int, include_deleted: bool = False) -> sqlite3.Row:
@@ -332,30 +343,148 @@ def health(regime: Regime = Depends(get_regime)):
     return {"status": "ok", "version": __version__, "regime": regime.code}
 
 
-def _amend(conn: sqlite3.Connection, result_id: int, measured_value: str) -> sqlite3.Row:
+def _amend(
+    conn: sqlite3.Connection,
+    regime: Regime,
+    actor: str,
+    result_id: int,
+    measured_value: str,
+    reason: str,
+) -> sqlite3.Row:
+    """Amend a measured value (SOP-DI-004 s5, SOP-QC-021 s6.2): audited, reasoned, recomputed, verified."""
     r = _get_result(conn, result_id)
-    places = decimal_places(r["upper_limit"] or r["lower_limit"] or "0")
-    rv = round(float(measured_value), places)
-    lo = float(r["lower_limit"]) if r["lower_limit"] else None
-    hi = float(r["upper_limit"]) if r["upper_limit"] else None
-    oos = (lo is not None and rv < lo) or (hi is not None and rv > hi)
+    if provisioned_user(conn, actor)["role"] not in AMEND_ROLES:
+        raise HTTPException(403, "amending results requires an analyst or QC Supervisor role")
+    if not re.fullmatch(MEASURED_VALUE_PATTERN, measured_value):
+        raise HTTPException(422, "measured_value must be a decimal number")
+    if Decimal(measured_value) == Decimal(r["measured_value"]):
+        raise HTTPException(422, "amended value is identical to the current measured value")
+    rv, oos = evaluate(
+        measured_value,
+        r["lower_limit"],
+        r["upper_limit"],
+        regime.results.rounding,
+        regime.results.limit_inclusive,
+    )
+    oos_changed = int(oos) != r["oos"]
+    status = (
+        PENDING_VERIFICATION
+        if oos_changed and regime.records.second_person_verification_on_oos_change
+        else "Amended"
+    )
+    changes = [
+        ("measured_value", r["measured_value"], measured_value),
+        ("reportable_value", r["reportable_value"], str(rv)),
+        ("oos", r["oos"], int(oos)),
+        ("status", r["status"], status),
+    ]
+    try:
+        for field, old, new in changes:
+            if str(old) != str(new):
+                audit.record(
+                    conn,
+                    regime,
+                    actor=actor,
+                    entity="assay_result",
+                    entity_id=result_id,
+                    action="update",
+                    field=field,
+                    old_value=old,
+                    new_value=new,
+                    reason=reason,
+                )
+    except audit.ReasonRequired as e:
+        conn.rollback()
+        raise HTTPException(422, str(e)) from e
     conn.execute(
-        "UPDATE assay_results SET measured_value=?, reportable_value=?, oos=?, status='Amended'"
-        " WHERE result_id=?",
-        (measured_value, f"{rv:.{places}f}", int(oos), result_id),
+        "UPDATE assay_results SET measured_value=?, reportable_value=?, oos=?, status=? WHERE result_id=?",
+        (measured_value, str(rv), int(oos), status, result_id),
     )
     conn.commit()
     return _get_result(conn, result_id)
 
 
+def _last_amender(conn: sqlite3.Connection, result_id: int) -> str | None:
+    row = conn.execute(
+        "SELECT actor FROM audit_trail WHERE entity='assay_result' AND entity_id=? AND action='update'"
+        " AND field='measured_value' ORDER BY audit_id DESC LIMIT 1",
+        (str(result_id),),
+    ).fetchone()
+    return row["actor"] if row else None
+
+
+def _verify(conn: sqlite3.Connection, regime: Regime, actor: str, result_id: int, reason: str) -> sqlite3.Row:
+    """Second-person verification of an amendment that changed the OOS conclusion (SOP-DI-004 s5.3)."""
+    r = _get_result(conn, result_id)
+    if r["status"] != PENDING_VERIFICATION:
+        raise HTTPException(409, "result is not pending verification")
+    if provisioned_user(conn, actor)["role"] not in VERIFY_ROLES:
+        raise HTTPException(403, "verifying amendments requires the QC Supervisor role")
+    if actor == _last_amender(conn, result_id):
+        raise HTTPException(403, "the verifier must be a different person from the amending user")
+    try:
+        audit.record(
+            conn,
+            regime,
+            actor=actor,
+            entity="assay_result",
+            entity_id=result_id,
+            action="update",
+            field="status",
+            old_value=r["status"],
+            new_value="Amended",
+            reason=reason,
+        )
+    except audit.ReasonRequired as e:
+        conn.rollback()
+        raise HTTPException(422, str(e)) from e
+    conn.execute("UPDATE assay_results SET status='Amended' WHERE result_id=?", (result_id,))
+    conn.commit()
+    return _get_result(conn, result_id)
+
+
 @app.patch("/api/results/{result_id}")
-def api_amend_result(result_id: int, body: AmendIn, conn: sqlite3.Connection = Depends(get_conn)):
-    return _row(_amend(conn, result_id, body.measured_value))
+def api_amend_result(
+    result_id: int,
+    body: AmendIn,
+    request: Request,
+    conn: sqlite3.Connection = Depends(get_conn),
+    regime: Regime = Depends(get_regime),
+):
+    return _row(_amend(conn, regime, current_user(request), result_id, body.measured_value, body.reason))
+
+
+@app.post("/api/results/{result_id}/verify")
+def api_verify_result(
+    result_id: int,
+    body: VerifyIn,
+    request: Request,
+    conn: sqlite3.Connection = Depends(get_conn),
+    regime: Regime = Depends(get_regime),
+):
+    return _row(_verify(conn, regime, current_user(request), result_id, body.reason))
 
 
 @app.post("/results/{result_id}/amend")
 def amend_result_form(
-    result_id: int, measured_value: str = Form(...), conn: sqlite3.Connection = Depends(get_conn)
+    result_id: int,
+    request: Request,
+    measured_value: str = Form(...),
+    reason: str = Form(""),
+    conn: sqlite3.Connection = Depends(get_conn),
+    regime: Regime = Depends(get_regime),
 ):
-    _amend(conn, result_id, measured_value.strip())
+    _amend(conn, regime, current_user(request), result_id, measured_value.strip(), reason)
+    return RedirectResponse(f"/results/{result_id}", status_code=303)
+
+
+@app.post("/results/{result_id}/verify")
+def verify_result_form(
+    result_id: int,
+    request: Request,
+    reason: str = Form(""),
+    conn: sqlite3.Connection = Depends(get_conn),
+    regime: Regime = Depends(get_regime),
+):
+    _verify(conn, regime, current_user(request), result_id, reason)
     return RedirectResponse(f"/results/{result_id}", status_code=303)
