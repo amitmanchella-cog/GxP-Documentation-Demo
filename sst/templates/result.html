@@ -7,10 +7,20 @@
 <dt>Analyst / tested</dt><dd>{{ r.analyst_name }} ({{ r.analyst }}) · {{ r.tested_at }}</dd>
 <dt>Status</dt><dd>{{ r.status }}</dd>
 </dl>
+{% if error %}<p class="oos" role="alert">{{ error }}</p>{% endif %}
+{% if r.status == pending %}
+<p><span class="oos">Pending verification</span> The OOS conclusion changed on amendment. A QC Supervisor other than the amending analyst must verify it before the result is reportable (SOP-DI-004 §5.3).</p>
+<form method="post" action="/results/{{ r.result_id }}/verify" class="filters">
+ <label>Reason for verification <input name="reason" size="40" minlength="{{ regime.records.reason_min_length }}" required></label>
+ <button>Verify amendment</button>
+</form>
+{% elif not r.deleted %}
 <form method="post" action="/results/{{ r.result_id }}/amend" class="filters">
  <label>Amend measured value <input name="measured_value" value="{{ r.measured_value }}" size="10" pattern="-?\d+(\.\d+)?" required></label>
+ <label>Reason for change <input name="reason" size="40" minlength="{{ regime.records.reason_min_length }}" required></label>
  <button>Amend</button>
 </form>
+{% endif %}
 <h2>Record history</h2>
 <table class="grid">
 <thead><tr><th>#</th><th>Timestamp (UTC)</th><th>User</th><th>Action</th><th>Field</th><th>Old</th><th>New</th><th>Reason</th></tr></thead>

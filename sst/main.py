@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 import sqlite3
 import threading
 from datetime import datetime, timezone
@@ -15,7 +16,7 @@ from pydantic import BaseModel, Field
 from . import __version__, audit
 from .db import connect, init_schema
 from .regimes import Regime, available_regimes, load_app_config, load_regime
-from .rounding import decimal_places, evaluate
+from .rounding import evaluate
 
 BASE = Path(__file__).resolve().parent
 app = FastAPI(title="Stability Sample Tracker", version=__version__, docs_url="/api/docs")
@@ -28,6 +29,10 @@ _state: dict = {}
 _conn_lock = threading.Lock()
 
 DELETE_ROLES = {"QC Supervisor", "QA"}
+AMEND_ROLES = {"QC Analyst", "Senior QC Analyst", "QC Supervisor"}
+VERIFY_ROLES = {"QC Supervisor"}
+PENDING_VERIFICATION = "Amended - pending verification"
+DECIMAL_RE = re.compile(r"^-?\d+(\.\d+)?$")
 
 
 def get_conn():
@@ -157,12 +162,7 @@ def sample_detail(request: Request, sample_id: str, conn: sqlite3.Connection = D
 @app.get("/results/{result_id}", response_class=HTMLResponse)
 def result_detail(request: Request, result_id: int, conn: sqlite3.Connection = Depends(get_conn)):
     # Deleted results stay viewable with their history (SOP-DI-004 s4.3: soft delete, record retained).
-    r = _get_result(conn, result_id, include_deleted=True)
-    trail = conn.execute(
-        "SELECT * FROM audit_trail WHERE entity='assay_result' AND entity_id=? ORDER BY audit_id",
-        (str(result_id),),
-    ).fetchall()
-    return templates.TemplateResponse(request, "result.html", ctx(request, r=r, trail=trail))
+    return _result_page(request, conn, result_id, None, 200)
 
 
 @app.get("/audit", response_class=HTMLResponse)
@@ -200,6 +200,11 @@ class DeleteIn(BaseModel):
 
 class AmendIn(BaseModel):
     measured_value: str = Field(pattern=r"^-?\d+(\.\d+)?$")
+    reason: str
+
+
+class VerifyIn(BaseModel):
+    reason: str
 
 
 def _get_result(conn: sqlite3.Connection, result_id: int, include_deleted: bool = False) -> sqlite3.Row:
@@ -332,30 +337,167 @@ def health(regime: Regime = Depends(get_regime)):
     return {"status": "ok", "version": __version__, "regime": regime.code}
 
 
-def _amend(conn: sqlite3.Connection, result_id: int, measured_value: str) -> sqlite3.Row:
+# ---------- Result amendment and verification (CHG-4127; SOP-DI-004 s4-s5, SOP-QC-021 s6.2) ----------
+
+
+def _audit_updates(conn, regime, actor: str, result_id: int, changes: list[tuple], reason: str) -> None:
+    for field, old, new in changes:
+        audit.record(
+            conn,
+            regime,
+            actor=actor,
+            entity="assay_result",
+            entity_id=result_id,
+            action="update",
+            field=field,
+            old_value=old,
+            new_value=new,
+            reason=reason,
+        )
+
+
+def _amend(
+    conn: sqlite3.Connection, regime: Regime, actor: str, result_id: int, measured_value: str, reason: str
+) -> sqlite3.Row:
+    if provisioned_user(conn, actor)["role"] not in AMEND_ROLES:
+        raise HTTPException(403, "amending results requires an analyst or QC Supervisor role")
+    measured_value = measured_value.strip()
+    if not DECIMAL_RE.match(measured_value):
+        raise HTTPException(422, "measured_value must be a decimal number, e.g. 0.155")
     r = _get_result(conn, result_id)
-    places = decimal_places(r["upper_limit"] or r["lower_limit"] or "0")
-    rv = round(float(measured_value), places)
-    lo = float(r["lower_limit"]) if r["lower_limit"] else None
-    hi = float(r["upper_limit"]) if r["upper_limit"] else None
-    oos = (lo is not None and rv < lo) or (hi is not None and rv > hi)
+    if r["status"] == PENDING_VERIFICATION:
+        raise HTTPException(409, "result has an amendment awaiting second-person verification")
+    if measured_value == r["measured_value"]:
+        raise HTTPException(422, "measured_value is unchanged; nothing to amend")
+    rv, oos = evaluate(
+        measured_value,
+        r["lower_limit"],
+        r["upper_limit"],
+        regime.results.rounding,
+        regime.results.limit_inclusive,
+    )
+    oos_changed = int(oos) != r["oos"]
+    status = (
+        PENDING_VERIFICATION
+        if oos_changed and regime.records.second_person_verification_on_oos_change
+        else "Amended"
+    )
+    changes = [
+        (f, old, new)
+        for f, old, new in [
+            ("measured_value", r["measured_value"], measured_value),
+            ("reportable_value", r["reportable_value"], str(rv)),
+            ("oos", r["oos"], int(oos)),
+            ("status", r["status"], status),
+        ]
+        if str(old) != str(new)
+    ]
+    try:
+        _audit_updates(conn, regime, actor, result_id, changes, reason)
+    except audit.ReasonRequired as e:
+        conn.rollback()
+        raise HTTPException(422, str(e)) from e
     conn.execute(
-        "UPDATE assay_results SET measured_value=?, reportable_value=?, oos=?, status='Amended'"
-        " WHERE result_id=?",
-        (measured_value, f"{rv:.{places}f}", int(oos), result_id),
+        "UPDATE assay_results SET measured_value=?, reportable_value=?, oos=?, status=? WHERE result_id=?",
+        (measured_value, str(rv), int(oos), status, result_id),
     )
     conn.commit()
     return _get_result(conn, result_id)
 
 
+def _amended_by(conn: sqlite3.Connection, result_id: int) -> str | None:
+    row = conn.execute(
+        "SELECT actor FROM audit_trail WHERE entity='assay_result' AND entity_id=? AND field='status'"
+        " AND new_value=? ORDER BY audit_id DESC LIMIT 1",
+        (str(result_id), PENDING_VERIFICATION),
+    ).fetchone()
+    return row["actor"] if row else None
+
+
+def _verify(conn: sqlite3.Connection, regime: Regime, actor: str, result_id: int, reason: str) -> sqlite3.Row:
+    if provisioned_user(conn, actor)["role"] not in VERIFY_ROLES:
+        raise HTTPException(403, "verifying an amendment requires the QC Supervisor role")
+    r = _get_result(conn, result_id)
+    if r["status"] != PENDING_VERIFICATION:
+        raise HTTPException(409, "result has no amendment awaiting verification")
+    if _amended_by(conn, result_id) == actor:
+        raise HTTPException(403, "the verifier must not be the analyst who amended the result")
+    try:
+        _audit_updates(conn, regime, actor, result_id, [("status", r["status"], "Amended")], reason)
+    except audit.ReasonRequired as e:
+        conn.rollback()
+        raise HTTPException(422, str(e)) from e
+    conn.execute("UPDATE assay_results SET status='Amended' WHERE result_id=?", (result_id,))
+    conn.commit()
+    return _get_result(conn, result_id)
+
+
 @app.patch("/api/results/{result_id}")
-def api_amend_result(result_id: int, body: AmendIn, conn: sqlite3.Connection = Depends(get_conn)):
-    return _row(_amend(conn, result_id, body.measured_value))
-
-
-@app.post("/results/{result_id}/amend")
-def amend_result_form(
-    result_id: int, measured_value: str = Form(...), conn: sqlite3.Connection = Depends(get_conn)
+def api_amend_result(
+    result_id: int,
+    body: AmendIn,
+    request: Request,
+    conn: sqlite3.Connection = Depends(get_conn),
+    regime: Regime = Depends(get_regime),
 ):
-    _amend(conn, result_id, measured_value.strip())
+    return _row(_amend(conn, regime, current_user(request), result_id, body.measured_value, body.reason))
+
+
+@app.post("/api/results/{result_id}/verify")
+def api_verify_amendment(
+    result_id: int,
+    body: VerifyIn,
+    request: Request,
+    conn: sqlite3.Connection = Depends(get_conn),
+    regime: Regime = Depends(get_regime),
+):
+    return _row(_verify(conn, regime, current_user(request), result_id, body.reason))
+
+
+def _result_page(request: Request, conn: sqlite3.Connection, result_id: int, error: str | None, status: int):
+    r = _get_result(conn, result_id, include_deleted=True)
+    trail = conn.execute(
+        "SELECT * FROM audit_trail WHERE entity='assay_result' AND entity_id=? ORDER BY audit_id",
+        (str(result_id),),
+    ).fetchall()
+    return templates.TemplateResponse(
+        request,
+        "result.html",
+        ctx(request, r=r, trail=trail, error=error, pending=PENDING_VERIFICATION),
+        status_code=status,
+    )
+
+
+@app.post("/results/{result_id}/amend", response_class=HTMLResponse)
+def amend_result_form(
+    request: Request,
+    result_id: int,
+    measured_value: str = Form(""),
+    reason: str = Form(""),
+    conn: sqlite3.Connection = Depends(get_conn),
+    regime: Regime = Depends(get_regime),
+):
+    try:
+        _amend(conn, regime, current_user(request), result_id, measured_value, reason)
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise
+        return _result_page(request, conn, result_id, e.detail, e.status_code)
+    return RedirectResponse(f"/results/{result_id}", status_code=303)
+
+
+@app.post("/results/{result_id}/verify", response_class=HTMLResponse)
+def verify_amendment_form(
+    request: Request,
+    result_id: int,
+    reason: str = Form(""),
+    conn: sqlite3.Connection = Depends(get_conn),
+    regime: Regime = Depends(get_regime),
+):
+    try:
+        _verify(conn, regime, current_user(request), result_id, reason)
+    except HTTPException as e:
+        if e.status_code == 404:
+            raise
+        return _result_page(request, conn, result_id, e.detail, e.status_code)
     return RedirectResponse(f"/results/{result_id}", status_code=303)
