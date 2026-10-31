@@ -215,3 +215,24 @@ def test_form_rejects_missing_reason(client, conn, nmt015):
     r = client.post(f"/results/{nmt015}/amend", data={"measured_value": "0.154"}, headers=ANALYST)
     assert r.status_code == 422
     assert _audit(conn, nmt015) == []
+
+
+# F14: re-amending a result that is pending verification must not bypass verification
+def test_reamend_while_pending_stays_pending(client, nmt015):
+    assert _amend(client, nmt015, "0.154").json()["status"] == "Pending verification"
+    assert _amend(client, nmt015, "0.150", headers=ANALYST2).json()["status"] == "Pending verification"
+
+
+# F15: no anonymous or default identity for mutations (SOP-DI-004 s3 Attributable)
+def test_amend_without_identity_rejected(client, conn, nmt015, monkeypatch):
+    monkeypatch.delenv("SST_USER", raising=False)
+    r = client.patch(f"/api/results/{nmt015}", json={"measured_value": "0.154", "reason": REASON})
+    assert r.status_code == 401
+    assert _audit(conn, nmt015) == []
+
+
+def test_amend_deleted_result_is_404(client, nmt015):
+    client.request(
+        "DELETE", f"/api/results/{nmt015}", json={"reason": "Duplicate entry removed"}, headers=SUPERVISOR
+    )
+    assert _amend(client, nmt015, "0.154").status_code == 404

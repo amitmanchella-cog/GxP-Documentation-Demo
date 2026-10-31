@@ -73,6 +73,14 @@ def current_user(request: Request) -> str:
     return request.headers.get("x-user") or os.environ.get("SST_USER", "mfarouk")
 
 
+def explicit_user(request: Request) -> str:
+    """Identity for amendment/verification: no implicit default account (SOP-DI-004 s3 Attributable)."""
+    user = request.headers.get("x-user") or os.environ.get("SST_USER")
+    if not user:
+        raise HTTPException(401, "no authenticated user (X-User header or SST_USER fallback)")
+    return user
+
+
 def provisioned_user(conn: sqlite3.Connection, user_id: str) -> sqlite3.Row:
     row = conn.execute("SELECT * FROM users WHERE user_id=? AND active=1", (user_id,)).fetchone()
     if not row:
@@ -371,9 +379,10 @@ def _amend(
         regime.results.limit_inclusive,
     )
     oos_changed = int(oos) != r["oos"]
+    needs_verification = oos_changed or r["status"] == PENDING_VERIFICATION
     status = (
         PENDING_VERIFICATION
-        if oos_changed and regime.records.second_person_verification_on_oos_change
+        if needs_verification and regime.records.second_person_verification_on_oos_change
         else "Amended"
     )
     changes = [
@@ -455,7 +464,7 @@ def api_amend_result(
     conn: sqlite3.Connection = Depends(get_conn),
     regime: Regime = Depends(get_regime),
 ):
-    return _row(_amend(conn, regime, current_user(request), result_id, body.measured_value, body.reason))
+    return _row(_amend(conn, regime, explicit_user(request), result_id, body.measured_value, body.reason))
 
 
 @app.post("/api/results/{result_id}/verify")
@@ -466,7 +475,7 @@ def api_verify_result(
     conn: sqlite3.Connection = Depends(get_conn),
     regime: Regime = Depends(get_regime),
 ):
-    return _row(_verify(conn, regime, current_user(request), result_id, body.reason))
+    return _row(_verify(conn, regime, explicit_user(request), result_id, body.reason))
 
 
 @app.post("/results/{result_id}/amend")
@@ -478,7 +487,7 @@ def amend_result_form(
     conn: sqlite3.Connection = Depends(get_conn),
     regime: Regime = Depends(get_regime),
 ):
-    _amend(conn, regime, current_user(request), result_id, measured_value.strip(), reason)
+    _amend(conn, regime, explicit_user(request), result_id, measured_value.strip(), reason)
     return RedirectResponse(f"/results/{result_id}", status_code=303)
 
 
@@ -490,5 +499,5 @@ def verify_result_form(
     conn: sqlite3.Connection = Depends(get_conn),
     regime: Regime = Depends(get_regime),
 ):
-    _verify(conn, regime, current_user(request), result_id, reason)
+    _verify(conn, regime, explicit_user(request), result_id, reason)
     return RedirectResponse(f"/results/{result_id}", status_code=303)
