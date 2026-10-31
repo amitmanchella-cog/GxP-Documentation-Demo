@@ -29,10 +29,10 @@ Coverage: 11/11 URS traced to FS, test and code. Rows with "Last executed" = ER-
 | Change control record | `validation/change_control/CC-CHG-4127.md` |
 | Pull request | [#6](https://github.com/amitmanchella-cog/GxP-Documentation-Demo/pull/6) |
 | Code commits | `805496c`, `7e96a8b` (F13 rollback), `f75d60c` (F14/F15) (branch `feature/chg-4127-amend-results-r3`) — `sst/main.py` (`_amend`, `_verify`, `api_amend_result`, `api_verify_result`, `amend_result_form`, `verify_result_form`), `sst/templates/result.html`, `tests/test_amend.py` |
-| Evidence commits | see CC-CHG-4127: `<evidence SHAs — parent fills>` |
+| Evidence commits | see CC-CHG-4127: `9e61826`, `aea14e1`, `8ed8b86`, `0812fe3`, `f666648`, `3508826`, `600fd97` |
 | Requirements | URS-010 → FS-009 (new); URS-011 → FS-010 (new); URS-002, URS-003, URS-006, URS-007, URS-008 (changed: amendment tests added) |
 | Test scripts | TS-005 (`tests/test_amend.py`, `tests/test_amend_boundaries.py`); TS-006 (`tests/test_amend_audit.py`) |
-| CI run | `<CI run URL — parent fills>` |
+| CI run | https://github.com/amitmanchella-cog/GxP-Documentation-Demo/actions/runs/41239870984 (job 124651363065, SHA `600fd97`) |
 | Executed results | ER-CHG-4127 (`validation/executed_results/ER-CHG-4127.md`) |
 | Devin session | https://devin-gtm.devinenterprise.com/sessions/968d18d35b254ea79fd50bf0becb2488 |
 

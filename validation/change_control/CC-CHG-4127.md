@@ -73,7 +73,7 @@ Status column: "Pending" means the artefact is being produced in parallel and mu
 | FS delta | `validation/deltas/URS-FS-delta-CHG-4127.md`. New FS-009 (amend), FS-010 (verify). Changed FS-002, FS-003, FS-004, FS-006, FS-007, FS-008 | Pending |
 | Risk assessment | `validation/RA-SST-CHG-4127.md` (change RA); `validation/RA-SST.md` (updated function rows) | Pending |
 | Test scripts | `validation/test_scripts/TS-005.md` (amendment, rounding/OOS boundaries, negative cases, second-person verification; automated in `tests/test_amend.py`); `validation/test_scripts/TS-006.md` (audit-trail verification; automated in `tests/test_amend_audit.py`) | Pending (`tests/test_amend.py` present at `805496c`) |
-| Executed results (CI job, commit SHA, pass/fail) | `validation/executed_results/ER-CHG-4127.md`. CI run: `<CI run URL — parent fills>` · SHA: `<final SHA — parent fills>` · Result: from CI `test-evidence` artefact (`reports/`) | Pending |
+| Executed results (CI job, commit SHA, pass/fail) | `validation/executed_results/ER-CHG-4127.md`. CI run: https://github.com/amitmanchella-cog/GxP-Documentation-Demo/actions/runs/41239870984 (job 124651363065, SHA `600fd97`) · SHA: `600fd97` · Result: from CI `test-evidence` artefact (`reports/`) | Pending |
 | RTM | `validation/RTM.md` rev 3.5: rows for URS-010/011 added, changed rows updated, coverage line | Pending |
 | Audit-trail verification (SOP-DI-004 §6) | `validation/test_scripts/TS-006.md` / `tests/test_amend_audit.py` | Pending |
 | Change-control record | `validation/change_control/CC-CHG-4127.md` (this document) | Draft |
@@ -89,10 +89,10 @@ Status column: "Pending" means the artefact is being produced in parallel and mu
 | `9e61826`, `aea14e1`, `8ed8b86`, `0812fe3`, `f666648`, `3508826` | Evidence workstreams (TS-006 + tests, URS/FS deltas, CC draft, RTM, RA, TS-005 + boundary tests), merged on the PR branch |
 | `7e96a8b` | Rolls back the request transaction on any failure (fixes F13, which was found by the TS-006 audit-trail verification) |
 | `f75d60c` | Keeps a re-amended result in pending verification (F14, found by RA/TS-005 as G1); requires an explicit identity to amend or verify (F15, G2) |
-| `<final SHA — parent fills>` | Final head, executed in CI (see ER-CHG-4127) |
+| `600fd97` | Final head, executed in CI (see ER-CHG-4127) |
 
 **Traceability chain:**
-CHG-4127 ([issue #2](https://github.com/amitmanchella-cog/GxP-Documentation-Demo/issues/2)) → PR [#6](https://github.com/amitmanchella-cog/GxP-Documentation-Demo/pull/6) → commits `d4a226e`, `805496c`, `<final SHA — parent fills>` → TS-005 (`tests/test_amend.py`) / TS-006 (`tests/test_amend_audit.py`) → CI run `<CI run URL — parent fills>` → `validation/executed_results/ER-CHG-4127.md` → URS-010/011, FS-009/010 and changed URS/FS rows (`validation/deltas/URS-FS-delta-CHG-4127.md`, `validation/RTM.md` rev 3.5) → Devin sessions: [evidence workstream](https://devin-gtm.devinenterprise.com/sessions/968d18d35b254ea79fd50bf0becb2488), [author's originating session](https://devin-gtm.devinenterprise.com/sessions/1e103ae6045b46c8bc2aadaf3ea21c53)
+CHG-4127 ([issue #2](https://github.com/amitmanchella-cog/GxP-Documentation-Demo/issues/2)) → PR [#6](https://github.com/amitmanchella-cog/GxP-Documentation-Demo/pull/6) → commits `d4a226e`, `805496c`, `600fd97` → TS-005 (`tests/test_amend.py`) / TS-006 (`tests/test_amend_audit.py`) → CI run https://github.com/amitmanchella-cog/GxP-Documentation-Demo/actions/runs/41239870984 (job 124651363065, SHA `600fd97`) → `validation/executed_results/ER-CHG-4127.md` → URS-010/011, FS-009/010 and changed URS/FS rows (`validation/deltas/URS-FS-delta-CHG-4127.md`, `validation/RTM.md` rev 3.5) → Devin sessions: [evidence workstream](https://devin-gtm.devinenterprise.com/sessions/968d18d35b254ea79fd50bf0becb2488), [author's originating session](https://devin-gtm.devinenterprise.com/sessions/1e103ae6045b46c8bc2aadaf3ea21c53)
 
 **Reviewers:** AI-assisted review (Devin) recorded on PR #6. Independent human technical review is pending (section 8).
 
