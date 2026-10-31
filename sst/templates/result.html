@@ -7,6 +7,20 @@
 <dt>Analyst / tested</dt><dd>{{ r.analyst_name }} ({{ r.analyst }}) · {{ r.tested_at }}</dd>
 <dt>Status</dt><dd>{{ r.status }}</dd>
 </dl>
+{% if not r.deleted %}
+<form method="post" action="/results/{{ r.result_id }}/amend" class="filters">
+ <label>Amend measured value <input name="measured_value" value="{{ r.measured_value }}" size="10" pattern="-?\d+(\.\d+)?" required></label>
+ <label>Reason for change <input name="reason" size="40" minlength="{{ regime.records.reason_min_length }}" required></label>
+ <button>Amend</button>
+</form>
+{% if r.status == 'Pending verification' %}
+<p class="oos">OOS conclusion changed by amendment: supervisor verification required before the result is reportable.</p>
+<form method="post" action="/results/{{ r.result_id }}/verify" class="filters">
+ <label>Verification comment <input name="reason" size="40" minlength="{{ regime.records.reason_min_length }}" required></label>
+ <button>Verify amendment</button>
+</form>
+{% endif %}
+{% endif %}
 <h2>Record history</h2>
 <table class="grid">
 <thead><tr><th>#</th><th>Timestamp (UTC)</th><th>User</th><th>Action</th><th>Field</th><th>Old</th><th>New</th><th>Reason</th></tr></thead>
