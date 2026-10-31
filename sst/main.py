@@ -6,8 +6,8 @@ import threading
 from datetime import datetime, timezone
 from pathlib import Path
 
-from fastapi import Depends, FastAPI, Form, HTTPException, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi import Depends, FastAPI, HTTPException, Request
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel, Field
@@ -15,7 +15,7 @@ from pydantic import BaseModel, Field
 from . import __version__, audit
 from .db import connect, init_schema
 from .regimes import Regime, available_regimes, load_app_config, load_regime
-from .rounding import decimal_places, evaluate
+from .rounding import evaluate
 
 BASE = Path(__file__).resolve().parent
 app = FastAPI(title="Stability Sample Tracker", version=__version__, docs_url="/api/docs")
@@ -198,10 +198,6 @@ class DeleteIn(BaseModel):
     reason: str
 
 
-class AmendIn(BaseModel):
-    measured_value: str = Field(pattern=r"^-?\d+(\.\d+)?$")
-
-
 def _get_result(conn: sqlite3.Connection, result_id: int, include_deleted: bool = False) -> sqlite3.Row:
     r = conn.execute(
         """SELECT r.*, sp.test_name, sp.method, sp.unit, sp.limit_text, sp.lower_limit, sp.upper_limit,
@@ -330,32 +326,3 @@ def api_result_audit(result_id: int, conn: sqlite3.Connection = Depends(get_conn
 @app.get("/api/health")
 def health(regime: Regime = Depends(get_regime)):
     return {"status": "ok", "version": __version__, "regime": regime.code}
-
-
-def _amend(conn: sqlite3.Connection, result_id: int, measured_value: str) -> sqlite3.Row:
-    r = _get_result(conn, result_id)
-    places = decimal_places(r["upper_limit"] or r["lower_limit"] or "0")
-    rv = round(float(measured_value), places)
-    lo = float(r["lower_limit"]) if r["lower_limit"] else None
-    hi = float(r["upper_limit"]) if r["upper_limit"] else None
-    oos = (lo is not None and rv < lo) or (hi is not None and rv > hi)
-    conn.execute(
-        "UPDATE assay_results SET measured_value=?, reportable_value=?, oos=?, status='Amended'"
-        " WHERE result_id=?",
-        (measured_value, f"{rv:.{places}f}", int(oos), result_id),
-    )
-    conn.commit()
-    return _get_result(conn, result_id)
-
-
-@app.patch("/api/results/{result_id}")
-def api_amend_result(result_id: int, body: AmendIn, conn: sqlite3.Connection = Depends(get_conn)):
-    return _row(_amend(conn, result_id, body.measured_value))
-
-
-@app.post("/results/{result_id}/amend")
-def amend_result_form(
-    result_id: int, measured_value: str = Form(...), conn: sqlite3.Connection = Depends(get_conn)
-):
-    _amend(conn, result_id, measured_value.strip())
-    return RedirectResponse(f"/results/{result_id}", status_code=303)

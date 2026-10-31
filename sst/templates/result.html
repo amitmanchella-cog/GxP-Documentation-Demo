@@ -7,10 +7,6 @@
 <dt>Analyst / tested</dt><dd>{{ r.analyst_name }} ({{ r.analyst }}) · {{ r.tested_at }}</dd>
 <dt>Status</dt><dd>{{ r.status }}</dd>
 </dl>
-<form method="post" action="/results/{{ r.result_id }}/amend" class="filters">
- <label>Amend measured value <input name="measured_value" value="{{ r.measured_value }}" size="10" pattern="-?\d+(\.\d+)?" required></label>
- <button>Amend</button>
-</form>
 <h2>Record history</h2>
 <table class="grid">
 <thead><tr><th>#</th><th>Timestamp (UTC)</th><th>User</th><th>Action</th><th>Field</th><th>Old</th><th>New</th><th>Reason</th></tr></thead>
