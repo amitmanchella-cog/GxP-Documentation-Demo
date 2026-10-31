@@ -1,8 +1,5 @@
 # Changelog
 
-## Unreleased (CHG-4127)
-- Analysts can amend a measured value on the result page and via `PATCH /api/results/{id}`; the reportable value and OOS flag are recalculated.
-
 ## 3.4.1 — 2025-09-02 (CC-2025-018)
 - Audit-trail view: default page size 200, link entity IDs to records.
 - Dependency refresh (FastAPI 0.115 line); no functional change. Regression run attached to CC-2025-018.
