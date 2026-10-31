@@ -1,0 +1,17 @@
+regime: GLP
+label: GLP (21 CFR 58, OECD GLP Principles)
+record_controls:
+  audit_trail_on: [create, update, delete]
+  reason_required_on: [update, delete]
+  reason_min_length: 10
+  deletion: soft
+  second_person_verification_on_oos_change: true
+results:
+  rounding: half_up
+  compare_on: reportable
+  limit_inclusive: true
+retention:
+  records_years: 15
+  audit_trail_years: 15
+e_signature:
+  required_for: [study_director_approval, amendment_verification]

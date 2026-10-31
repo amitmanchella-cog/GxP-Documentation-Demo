@@ -1,0 +1,18 @@
+{% extends "base.html" %}{% block title %}{{ s.sample_id }}{% endblock %}{% block body %}
+<h1>{{ s.sample_id }} <span class="st st-{{ s.status|lower|replace(' ','-') }}">{{ s.status }}</span></h1>
+<dl class="kv">
+<dt>Study</dt><dd>{{ s.study_id }} · {{ s.product }} {{ s.strength }}</dd>
+<dt>Batch</dt><dd>{{ s.batch_id }} (mfg {{ s.mfg_date }}, {{ s.pack }})</dd>
+<dt>Condition / TP</dt><dd>{{ s.cond_label }} · {{ s.timepoint_months }} M</dd>
+<dt>Due / pulled</dt><dd>{{ s.due_date }} / {{ s.pull_date or '—' }}</dd>
+<dt>Location</dt><dd>{{ s.location }}</dd>
+</dl>
+<h2>Assay results <small>{{ results|length }}</small></h2>
+<table class="grid">
+<thead><tr><th>ID</th><th>Test</th><th>Method</th><th class="n">Measured</th><th class="n">Reportable</th><th>Unit</th><th>Specification</th><th>OOS</th><th>Analyst</th><th>Instrument</th><th>Tested (UTC)</th><th>Status</th></tr></thead>
+<tbody>{% for r in results %}
+<tr class="{% if r.oos %}row-oos{% endif %}"><td><a href="/results/{{ r.result_id }}">R-{{ '%06d'|format(r.result_id) }}</a></td><td>{{ r.test_name }}</td><td class="dim">{{ r.method }}</td>
+<td class="n">{{ r.measured_value }}</td><td class="n"><b>{{ r.reportable_value }}</b></td><td>{{ r.unit }}</td><td>{{ r.limit_text }}</td>
+<td>{% if r.oos %}<span class="oos">OOS</span>{% else %}—{% endif %}</td><td>{{ r.analyst_name }}</td><td>{{ r.instrument }}</td><td>{{ r.tested_at }}</td><td>{{ r.status }}</td></tr>
+{% endfor %}</tbody></table>
+{% endblock %}

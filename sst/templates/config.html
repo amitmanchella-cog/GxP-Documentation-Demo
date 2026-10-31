@@ -1,0 +1,15 @@
+{% extends "base.html" %}{% block title %}Config{% endblock %}{% block body %}
+<h1>Runtime configuration</h1>
+<dl class="kv">
+<dt>System</dt><dd>{{ cfg.system_name }} ({{ cfg.system_id }}) · {{ cfg.site }}</dd>
+<dt>Active regime</dt><dd><b>{{ regime.code }}</b> — {{ regime.label }} · available: {{ regimes|join(', ') }}</dd>
+<dt>Audit trail on</dt><dd>{{ regime.records.audit_trail_on|join(', ') }}</dd>
+<dt>Reason required on</dt><dd>{{ regime.records.reason_required_on|join(', ') }} (min {{ regime.records.reason_min_length }} chars)</dd>
+<dt>Deletion</dt><dd>{{ regime.records.deletion }}</dd>
+<dt>Second-person verification when OOS status changes</dt><dd>{{ regime.records.second_person_verification_on_oos_change }}</dd>
+<dt>Result rounding</dt><dd>{{ regime.results.rounding }} · compare on {{ regime.results.compare_on }} · limits inclusive: {{ regime.results.limit_inclusive }}</dd>
+<dt>Retention</dt><dd>{% for k, v in regime.retention.items() %}{{ k }}: {{ v }} y{% if not loop.last %} · {% endif %}{% endfor %}</dd>
+<dt>E-signature required for</dt><dd>{{ regime.e_signature.required_for|join(', ') }}</dd>
+</dl>
+<p class="dim">Regime files: <code>config/regimes/*.yaml</code>. Change via change control only.</p>
+{% endblock %}
