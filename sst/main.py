@@ -44,7 +44,11 @@ def get_conn():
             conn = connect()
             init_schema(conn)
             _state["conn"] = conn
-        yield _state["conn"]
+        try:
+            yield _state["conn"]
+        except BaseException:
+            _state["conn"].rollback()
+            raise
     finally:
         _conn_lock.release()
 

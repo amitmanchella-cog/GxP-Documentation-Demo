@@ -208,14 +208,6 @@ def test_original_value_visible_in_history_view(client, conn, nmt015):
 
 
 # SOP-DI-004 s6(d): a storage failure after the audit rows are written must not leave orphan audit rows
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "Defect: sst.main._amend only rolls back on audit.ReasonRequired. If the UPDATE of assay_results "
-        "fails after the audit rows were inserted, the shared connection keeps the open transaction and "
-        "the next request's commit persists audit rows for an amendment that never happened."
-    ),
-)
 def test_amend_storage_failure_leaves_no_orphan_audit(conn, nmt015, range_result):
     from fastapi.testclient import TestClient
 
