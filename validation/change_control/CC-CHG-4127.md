@@ -1,7 +1,7 @@
 # CC-CHG-4127 — Result amendment with reason, audit trail and OOS second-person verification
 **System:** SST 3.4.1 → 3.5.0 (GMP regime, `config/regimes/gmp.yaml`) · **Status:** Draft · **Raised:** <date — Change Owner fills> · **Requested by:** T. Brennan (per CR #2) · **Change Owner:** P. Natarajan (per CR #2) · **QA:** <to be assigned>
 
-> Draft prepared with Devin drafting assistance (SOP-CSV-010 §4.7). QA assigns the CC number in the QMS. Approvals, signatures and dates are entered by the named humans only; none have been entered here. Final CI run URL and SHA are added by the parent session.
+> Draft prepared with Devin drafting assistance (SOP-CSV-010 §4.7). QA assigns the CC number in the QMS. Approvals, signatures and dates are entered by the named humans only; none have been entered here. Final CI run URL and SHA are recorded in section 5 and ER-CHG-4127.
 
 ## 1. Description and reason
 **Change request:** CHG-4127 ([issue #2](https://github.com/amitmanchella-cog/GxP-Documentation-Demo/issues/2)) · **PR:** [#6](https://github.com/amitmanchella-cog/GxP-Documentation-Demo/pull/6) `feature/chg-4127-amend-results-r3` → `main` · **Target release:** 3.5.0
@@ -64,18 +64,18 @@ Source: PR #6 review "GxP findings — CHG-4127 (PR #6 @ `d4a226e`)": 9 blocking
 | F15 | Advisory (found by the evidence workstream, G2) | SOP-DI-004 §3 Attributable | With no identity, requests were attributed by default to `mfarouk` | **Partly fixed in `f75d60c`**: amend/verify return 401. The fallback for create/delete is unchanged; QA/Change Owner to decide on a follow-up CR | TS-005 |
 
 ## 4. Evidence package (SOP-CSV-010 §6, High)
-Status column: "Pending" means the artefact is being produced in parallel and must be checked when the package is assembled.
+Status column: "Assembled" means the artefact is on the PR branch in Draft. Human review and approval are still required.
 
 | Deliverable | Reference | Status |
 |---|---|---|
 | GxP impact assessment | Section 2 of this record; PR #6 comment "GxP impact & risk assessment — CHG-4127" | Drafted |
-| URS delta | `validation/deltas/URS-FS-delta-CHG-4127.md`. New URS-010 (result amendment), URS-011 (second-person verification of an OOS-conclusion change). Changed URS-002, URS-003, URS-006, URS-007, URS-008 | Pending |
-| FS delta | `validation/deltas/URS-FS-delta-CHG-4127.md`. New FS-009 (amend), FS-010 (verify). Changed FS-002, FS-003, FS-004, FS-006, FS-007, FS-008 | Pending |
-| Risk assessment | `validation/RA-SST-CHG-4127.md` (change RA); `validation/RA-SST.md` (updated function rows) | Pending |
-| Test scripts | `validation/test_scripts/TS-005.md` (amendment, rounding/OOS boundaries, negative cases, second-person verification; automated in `tests/test_amend.py`); `validation/test_scripts/TS-006.md` (audit-trail verification; automated in `tests/test_amend_audit.py`) | Pending (`tests/test_amend.py` present at `805496c`) |
-| Executed results (CI job, commit SHA, pass/fail) | `validation/executed_results/ER-CHG-4127.md`. CI run: https://github.com/amitmanchella-cog/GxP-Documentation-Demo/actions/runs/41239870984 (job 124651363065, SHA `600fd97`) · SHA: `600fd97` · Result: from CI `test-evidence` artefact (`reports/`) | Pending |
-| RTM | `validation/RTM.md` rev 3.5: rows for URS-010/011 added, changed rows updated, coverage line | Pending |
-| Audit-trail verification (SOP-DI-004 §6) | `validation/test_scripts/TS-006.md` / `tests/test_amend_audit.py` | Pending |
+| URS delta | `validation/deltas/URS-FS-delta-CHG-4127.md`. New URS-010 (result amendment), URS-011 (second-person verification of an OOS-conclusion change). Changed URS-002, URS-003, URS-006, URS-007, URS-008 | Assembled on PR #6 (Draft; awaiting human review) |
+| FS delta | `validation/deltas/URS-FS-delta-CHG-4127.md`. New FS-009 (amend), FS-010 (verify). Changed FS-002, FS-003, FS-004, FS-006, FS-007, FS-008 | Assembled on PR #6 (Draft; awaiting human review) |
+| Risk assessment | `validation/RA-SST-CHG-4127.md` (change RA); `validation/RA-SST.md` (updated function rows) | Assembled on PR #6 (Draft; awaiting human review) |
+| Test scripts | `validation/test_scripts/TS-005.md` (amendment, rounding/OOS boundaries, negative cases, second-person verification; automated in `tests/test_amend.py`); `validation/test_scripts/TS-006.md` (audit-trail verification; automated in `tests/test_amend_audit.py`) | Assembled on PR #6 (Draft; awaiting human review) |
+| Executed results (CI job, commit SHA, pass/fail) | `validation/executed_results/ER-CHG-4127.md`. CI run: https://github.com/amitmanchella-cog/GxP-Documentation-Demo/actions/runs/41239870984 (job 124651363065, SHA `600fd97`) · SHA: `600fd97` · Result: from CI `test-evidence` artefact (`reports/`) | Assembled on PR #6 (Draft; awaiting human review) |
+| RTM | `validation/RTM.md` rev 3.5: rows for URS-010/011 added, changed rows updated, coverage line | Assembled on PR #6 (Draft; awaiting human review) |
+| Audit-trail verification (SOP-DI-004 §6) | `validation/test_scripts/TS-006.md` / `tests/test_amend_audit.py` | Assembled on PR #6 (Draft; awaiting human review) |
 | Change-control record | `validation/change_control/CC-CHG-4127.md` (this document) | Draft |
 | Periodic review impact note | Section 6 of this record | Drafted |
 
@@ -108,8 +108,8 @@ CHG-4127 ([issue #2](https://github.com/amitmanchella-cog/GxP-Documentation-Demo
 |---|---|---|---|
 | O1 | F11: no e-signature in SST for `amendment_verification`. QA to decide between a QMS e-signature and a follow-up CR | QA | Open |
 | O2 | F10: CR #2 affected-functions section to be corrected | Change Owner / QA | Open |
-| O3 | F8: evidence package rows in section 4 still Pending; assemble and review | Change Owner | Open |
-| O4 | Executed results: final CI run URL and final SHA to be recorded in ER-CHG-4127 and this record | Parent session / Change Owner | Open |
+| O3 | F8: evidence package rows in section 4 assembled on PR #6; human review of the package | Change Owner | Open (assembled; awaiting review) |
+| O4 | Executed results: CI run 41239870984 and SHA `600fd97` recorded in ER-CHG-4127 and this record | Parent session | Closed (recorded) |
 | O5 | Independent human technical review of `805496c` and the evidence package (findings were raised and fixes drafted with AI assistance) | Independent technical reviewer | Open |
 | O6 | Residual risk: amendment relies on SSO proxy `X-User` attribution (FS-007). Unchanged control, same as the existing create/delete paths | — | Accepted per RA-SST r3.4 (to be reconfirmed in RA-SST-CHG-4127) |
 | O7 | VSR for release 3.5.0 to be raised | Change Owner / CSV | Open |

@@ -39,7 +39,7 @@ Coverage: 11/11 URS traced to FS, test and code. Rows with "Last executed" = ER-
 ## Open items at r3.5 (Draft)
 
 - F11: decision for QA on whether amendment and OOS verification require an electronic signature (21 CFR 11.50/11.200) rather than an SSO-attributed audit entry. Not implemented in `805496c`; QA decision to be recorded in CC-CHG-4127.
-- Evidence placeholders above (evidence commit SHAs, CI run URL) and ER-CHG-4127 execution results to be completed from CI before review.
+- Evidence commit SHAs, the CI run URL and the ER-CHG-4127 execution results are recorded (CI run 41239870984, SHA `600fd97`). Human review is pending.
 - TS-006 (`tests/test_amend_audit.py`) and `tests/test_amend_boundaries.py` are being written in parallel; test node IDs above must be checked against the committed files and the executed CI run before approval.
 - URS-SST, FS-SST and RA-SST revisions for URS-010/URS-011, FS-009/FS-010 and their risk ratings are tracked under CC-CHG-4127; the "High" risk shown for URS-010/URS-011 is subject to the RA-SST update.
 - Review and approval of r3.5: approver and dates intentionally left blank.
