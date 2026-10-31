@@ -168,10 +168,6 @@ def test_supervisor_cannot_verify_own_re_amendment(client, nmt015):
 
 
 # Finding 7 gap G1 (open against 805496c): a further amendment while pending clears the verification
-@pytest.mark.xfail(
-    strict=True,
-    reason="G1: _amend compares OOS with the pending value; a 2nd in-spec amendment skips verification",
-)
 def test_amendment_while_pending_keeps_verification_requirement(client, nmt015):
     assert _amend(client, nmt015, "0.154").json()["status"] == "Pending verification"
     assert _amend(client, nmt015, "0.150", headers=ANALYST2).json()["status"] == "Pending verification"
