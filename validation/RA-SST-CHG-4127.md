@@ -80,3 +80,12 @@ Periodic-review impact: the next SST periodic review should (a) include FS-009/F
 | Author (CSV) | | | |
 | Reviewer (QC Supervisor) | | | |
 | Approver (QA) | | | |
+
+
+## Addendum — gap disposition after integration (CHG-4127)
+| Gap | Disposition | Commit | Verifying test |
+|---|---|---|---|
+| G1 / F14 (R-07) | Fixed. A result in `Pending verification` stays pending on re-amendment until a different QC Supervisor verifies. Residual risk: Low (S4/P1/D1) | `f75d60c` | `tests/test_amend.py::test_reamend_while_pending_stays_pending`, `tests/test_amend_boundaries.py::test_amendment_while_pending_keeps_verification_requirement` |
+| G2 / F15 (R-06, FS-007) | Partly fixed in this change. The amendment and verification paths (`explicit_user()`) reject requests with no `X-User` and no `SST_USER` (401). The pre-existing default fallback in `current_user()` for create/delete and page display is unchanged. Change Owner/QA to decide whether a follow-up CR is needed | `f75d60c` | `tests/test_amend.py::test_amend_without_identity_rejected` |
+| F13 (R-01, new) | Fixed. Any failure inside a request rolls the whole transaction back, so there are no orphan audit rows (SOP-DI-004 §4.1, §6) | `7e96a8b` | `tests/test_amend_audit.py::test_amend_storage_failure_leaves_no_orphan_audit` |
+| F11 | Open, for a QA decision (e-signature) | — | — |

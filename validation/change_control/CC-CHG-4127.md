@@ -59,6 +59,9 @@ Source: PR #6 review "GxP findings — CHG-4127 (PR #6 @ `d4a226e`)": 9 blocking
 | F10 | Advisory | SOP-CSV-010 §4.2 | CR #2 "Affected functions" lists only FS-005/006/008 | **For QA decision**: Change Owner and QA to correct the CR impact section to add FS-002/003/004/007 (and new FS-009/010). Not a code change | — |
 | F11 | Advisory | `gmp.yaml` `e_signature.required_for: [amendment_verification]`; 21 CFR 11.50/11.200 | SST has no e-signature capability. Verification is an attributed, reason-bearing audit entry, which is **not** an e-signature | **For QA decision**: either the e-signature for amendment verification is applied in the QMS, or a follow-up CR adds e-signature to SST. Record the decision here before approval | — |
 | F12 | Advisory | SOP-DI-004 §4.1 | Amendments that do not change the value would set a misleading `Amended` status | **Fixed in `805496c`**: rejected with 422 | TS-005 |
+| F13 | Blocking (found by the evidence workstream) | SOP-DI-004 §4.1, §6 | A storage failure after the audit insert left orphan audit rows that the next request committed | **Fixed in `7e96a8b`**: `get_conn()` rolls back on any exception | TS-006 |
+| F14 | Blocking (found by the evidence workstream, G1) | SOP-DI-004 §5.3 | A second amendment made while the result was pending verification cleared the verification requirement | **Fixed in `f75d60c`** | TS-005 |
+| F15 | Advisory (found by the evidence workstream, G2) | SOP-DI-004 §3 Attributable | With no identity, requests were attributed by default to `mfarouk` | **Partly fixed in `f75d60c`**: amend/verify return 401. The fallback for create/delete is unchanged; QA/Change Owner to decide on a follow-up CR | TS-005 |
 
 ## 4. Evidence package (SOP-CSV-010 §6, High)
 Status column: "Pending" means the artefact is being produced in parallel and must be checked when the package is assembled.
@@ -83,7 +86,10 @@ Status column: "Pending" means the artefact is being produced in parallel and mu
 |---|---|
 | `d4a226e` | CHG-4127: allow analysts to amend assay results (original head; findings F1–F12 raised against this) |
 | `805496c` | CHG-4127: audited, reasoned, exact-decimal result amendment with OOS second-person verification (fixes F1–F7, F9, F12; adds `tests/test_amend.py`) |
-| `<final SHA — parent fills>` | Final head including validation evidence package |
+| `9e61826`, `aea14e1`, `8ed8b86`, `0812fe3`, `f666648`, `3508826` | Evidence workstreams (TS-006 + tests, URS/FS deltas, CC draft, RTM, RA, TS-005 + boundary tests), merged on the PR branch |
+| `7e96a8b` | Rolls back the request transaction on any failure (fixes F13, which was found by the TS-006 audit-trail verification) |
+| `f75d60c` | Keeps a re-amended result in pending verification (F14, found by RA/TS-005 as G1); requires an explicit identity to amend or verify (F15, G2) |
+| `<final SHA — parent fills>` | Final head, executed in CI (see ER-CHG-4127) |
 
 **Traceability chain:**
 CHG-4127 ([issue #2](https://github.com/amitmanchella-cog/GxP-Documentation-Demo/issues/2)) → PR [#6](https://github.com/amitmanchella-cog/GxP-Documentation-Demo/pull/6) → commits `d4a226e`, `805496c`, `<final SHA — parent fills>` → TS-005 (`tests/test_amend.py`) / TS-006 (`tests/test_amend_audit.py`) → CI run `<CI run URL — parent fills>` → `validation/executed_results/ER-CHG-4127.md` → URS-010/011, FS-009/010 and changed URS/FS rows (`validation/deltas/URS-FS-delta-CHG-4127.md`, `validation/RTM.md` rev 3.5) → Devin sessions: [evidence workstream](https://devin-gtm.devinenterprise.com/sessions/968d18d35b254ea79fd50bf0becb2488), [author's originating session](https://devin-gtm.devinenterprise.com/sessions/1e103ae6045b46c8bc2aadaf3ea21c53)
